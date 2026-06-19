@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI in Video Games</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #000;
+    font-family: 'Rajdhani', sans-serif;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .deck { width: 100vw; height: 100vh; position: relative; }
+
+  .slide {
+    display: none;
+    width: 100%; height: 100%;
+    position: absolute; inset: 0;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+  .slide.active { display: flex; }
+
+  .slide-bg {
+    position: absolute; inset: 0;
+    background-size: cover;
+    background-position: center;
+    z-index: 0;
+    transition: opacity 0.4s;
+  }
+  .overlay {
+    position: absolute; inset: 0; z-index: 1;
+    background: linear-gradient(to top, rgba(0,0,0,0.96) 40%, rgba(0,0,0,0.55) 100%);
+  }
+
+  /* ── THUMBNAIL STRIP ── */
+  .thumb-strip {
+    position: absolute;
+    right: 32px; top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .thumb {
+    width: 80px; height: 52px;
+    border-radius: 4px;
+    background-size: cover;
+    background-position: center;
+    border: 1px solid #222;
+    opacity: 0.5;
+    transition: opacity 0.2s, border-color 0.2s;
+    cursor: default;
+  }
+  .thumb.highlight {
+    opacity: 1;
+    border-color: #FF6B00;
+    box-shadow: 0 0 8px rgba(255,107,0,0.4);
+  }
+  .thumb-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 5px;
+    color: #444;
+    text-align: center;
+    margin-top: 3px;
+  }
+  .thumb-wrap { display: flex; flex-direction: column; align-items: center; }
+
+  /* ── CONTENT ── */
+  .slide-content {
+    position: relative; z-index: 2;
+    padding: 0 260px 52px 64px;
+    width: 100%;
+  }
+  .slide.centered {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+  .slide.centered .slide-content {
+    padding: 48px 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ── HUD ── */
+  .hud {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 20px;
+  }
+  .hud-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px; color: #444; white-space: nowrap;
+  }
+  .hud-track { flex: 1; height: 3px; background: #1a1a1a; border-radius: 2px; overflow: hidden; }
+  .hud-fill { height: 100%; background: #00FF41; border-radius: 2px; transition: width 0.5s ease; }
+
+  .section-tag {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px; color: #FF6B00;
+    letter-spacing: 1px; margin-bottom: 12px; display: block;
+  }
+  .slide-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 18px; color: #00FF41;
+    line-height: 1.7; margin-bottom: 20px;
+  }
+  .slide-body {
+    font-size: 21px; line-height: 1.65; color: #D8D8D8; max-width: 820px;
+  }
+  .slide-body strong { color: #FF6B00; font-weight: 700; }
+
+  .quote {
+    border-left: 4px solid #FF6B00;
+    padding: 10px 18px; margin-top: 18px;
+    font-size: 18px; color: #bbb;
+    font-style: italic; line-height: 1.6;
+  }
+  .quote strong { color: #FF6B00; font-style: normal; }
+
+  .tags { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 6px; padding: 5px 10px;
+    border: 1px solid #FF6B00; color: #FF6B00; border-radius: 3px;
+  }
+
+  .speaker {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px; color: #00FF41;
+    border: 1px solid #00FF41;
+    display: inline-block; padding: 4px 10px;
+    border-radius: 3px; margin-bottom: 14px;
+  }
+
+  /* ── COVER ── */
+  .cover-eyebrow { font-family:'Press Start 2P',monospace; font-size:9px; color:#333; letter-spacing:4px; margin-bottom:32px; }
+  .cover-title   { font-family:'Press Start 2P',monospace; font-size:40px; color:#00FF41; line-height:1.5; margin-bottom:4px; }
+  .cover-sub     { font-family:'Press Start 2P',monospace; font-size:40px; color:#fff;    line-height:1.5; margin-bottom:32px; }
+  .cover-line    { width:80px; height:3px; background:#FF6B00; margin:0 auto 32px; }
+  .cover-desc    { font-size:20px; color:#555; letter-spacing:1px; line-height:1.9; }
+  .blink { animation: bl 1.2s step-end infinite; }
+  @keyframes bl { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ── SCANLINES ── */
+  body::after {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:9999;
+    background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.05) 3px, rgba(0,0,0,0.05) 4px);
+  }
+
+  /* ── NAV ── */
+  .nav {
+    position:fixed; bottom:0; left:0; right:0;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 48px;
+    background:rgba(0,0,0,0.88); border-top:1px solid #111; z-index:100;
+  }
+  .nav-btn {
+    font-family:'Press Start 2P',monospace; font-size:8px;
+    background:none; border:1px solid #222; color:#444;
+    padding:9px 16px; cursor:pointer; border-radius:3px;
+    transition:border-color .2s, color .2s;
+  }
+  .nav-btn:hover:not(:disabled) { border-color:#00FF41; color:#00FF41; }
+  .nav-btn:disabled { opacity:.15; cursor:default; }
+  .nav-dots { display:flex; gap:6px; align-items:center; }
+  .dot {
+    width:7px; height:7px; border-radius:50%;
+    background:#222; border:none; cursor:pointer; padding:0;
+    transition:background .2s, transform .2s;
+  }
+  .dot.active { background:#00FF41; transform:scale(1.3); }
+  .dot:hover:not(.active) { background:#555; }
+  .slide-counter { font-family:'Press Start 2P',monospace; font-size:7px; color:#333; min-width:55px; text-align:right; }
+
+  .fs-hint {
+    position:fixed; top:16px; right:20px;
+    font-family:'Press Start 2P',monospace; font-size:7px; color:#222;
+    z-index:200; cursor:pointer; transition:color .2s;
+    user-select:none;
+  }
+  .fs-hint:hover { color:#555; }
+
+  /* ── TWO-COL (conclusion) ── */
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:4px; }
+  .col-block { background:rgba(255,255,255,0.04); border:1px solid #1e1e1e; border-radius:6px; padding:14px 18px; }
+  .col-title { font-family:'Press Start 2P',monospace; font-size:7px; color:#555; margin-bottom:10px; display:block; }
+  .col-body { font-size:17px; line-height:1.6; color:#ccc; }
+  .col-body strong { color:#FF6B00; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- 0: COVER -->
+  <div class="slide active centered" id="s0">
+    <div class="slide-bg" style="background:radial-gradient(ellipse at 50% 120%, #001a00 0%, #000 60%);"></div>
+    <div class="overlay" style="background:rgba(0,0,0,0.3);"></div>
+    <div class="slide-content">
+      <div class="cover-eyebrow">ENGLISH ORAL PRESENTATION</div>
+      <div class="cover-title">AI IN</div>
+      <div class="cover-sub">VIDEO GAMES</div>
+      <div class="cover-line"></div>
+      <div class="cover-desc">How artificial intelligence<br>transformed gaming forever</div>
+      <div style="margin-top:56px;font-family:'Press Start 2P',monospace;font-size:8px;color:#1a1a1a;" class="blink">▶ PRESS → TO START</div>
+    </div>
+  </div>
+
+  <!-- 1: INTRO — S1 -->
+  <div class="slide" id="s1">
+    <div class="slide-bg" style="background-image:url('https://eipgaming.com/wp-content/uploads/2021/02/cyberpunk-2077-crowds.jpg'); background-position:center top;"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://eipgaming.com/wp-content/uploads/2021/02/cyberpunk-2077-crowds.jpg');"></div><div class="thumb-label">CYBERPUNK 2077</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:8%"></div></div></div>
+      <span class="section-tag">01 — INTRODUCTION</span>
+      <div class="slide-title">Setting the Scene</div>
+      <span class="speaker">▶ SPEAKER 1</span>
+      <div class="slide-body">
+        Today we are going to talk about <strong>Artificial Intelligence in video games</strong>. AI is one of the most fascinating technologies of our time — and video games are one of the places where we can see it in action <strong>every single day</strong>, even without realizing it.
+      </div>
+      <div class="quote">In <strong>Cyberpunk 2077</strong>, thousands of NPCs live their own routines — all driven by AI systems running in the background.</div>
+    </div>
+  </div>
+
+  <!-- 2: INTRO — S2 -->
+  <div class="slide" id="s2">
+    <div class="slide-bg" style="background-image:url('https://eipgaming.com/wp-content/uploads/2021/02/cyberpunk-2077-crowds.jpg'); background-position:center top;"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://eipgaming.com/wp-content/uploads/2021/02/cyberpunk-2077-crowds.jpg');"></div><div class="thumb-label">CYBERPUNK 2077</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:15%"></div></div></div>
+      <span class="section-tag">01 — INTRODUCTION</span>
+      <div class="slide-title">Why This Topic?</div>
+      <span class="speaker">▶ SPEAKER 2</span>
+      <div class="slide-body">
+        We chose this topic because video games are something <strong>many of us are familiar with</strong>. Behind every enemy that chases you, every teammate that helps you, or every character that reacts to your decisions — there is an <strong>AI system working in the background</strong>.
+      </div>
+      <div class="tags"><span class="tag">BEHAVIOR</span><span class="tag">NPCs</span><span class="tag">DECISION-MAKING</span></div>
+    </div>
+  </div>
+
+  <!-- 3: PRESENT SIMPLE — S1 -->
+  <div class="slide" id="s3">
+    <div class="slide-bg" style="background-image:url('https://gamerpayblog.b-cdn.net/wp-content/uploads/2023/10/cs2-screenshot-spots.jpg');"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://gamerpayblog.b-cdn.net/wp-content/uploads/2023/10/cs2-screenshot-spots.jpg');"></div><div class="thumb-label">CS2</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://cdn.mos.cms.futurecdn.net/rjFMUYJYwqHmgMvWyEpHDN.jpg');"></div><div class="thumb-label">THE LAST OF US</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:23%"></div></div></div>
+      <span class="section-tag">02 — PRESENT SIMPLE · How AI Is Used Today</span>
+      <div class="slide-title">Controlling Characters</div>
+      <span class="speaker">▶ SPEAKER 1</span>
+      <div class="slide-body">
+        Today, AI <strong>controls</strong> the behavior of non-player characters (NPCs). It <strong>decides</strong> how enemies move, attack, and react to the player. Games like <strong>The Last of Us</strong> or <strong>CS2</strong> use AI to make opponents feel intelligent and unpredictable.
+      </div>
+      <div class="tags"><span class="tag">CS2</span><span class="tag">THE LAST OF US</span><span class="tag">NPC BEHAVIOR</span></div>
+    </div>
+  </div>
+
+  <!-- 4: PRESENT SIMPLE — S2 -->
+  <div class="slide" id="s4">
+    <div class="slide-bg" style="background-image:url('https://i0.wp.com/alanzelauber.com/wp-content/uploads/2022/07/hero.png?ssl=1');"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://i0.wp.com/alanzelauber.com/wp-content/uploads/2022/07/hero.png?ssl=1');"></div><div class="thumb-label">MINECRAFT</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://www.deltia.gaming/wp-content/uploads/2024/05/No-Mans-Sky-Planet.jpg');"></div><div class="thumb-label">NO MAN'S SKY</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:30%"></div></div></div>
+      <span class="section-tag">02 — PRESENT SIMPLE · How AI Is Used Today</span>
+      <div class="slide-title">Generating Worlds</div>
+      <span class="speaker">▶ SPEAKER 2</span>
+      <div class="slide-body">
+        AI also helps with <strong>procedural generation</strong> — the game <strong>creates</strong> maps, levels, or content automatically. <strong>Minecraft</strong> and <strong>No Man's Sky</strong> use this to generate virtually infinite worlds. AI also <strong>adapts the difficulty</strong> based on how well the player performs.
+      </div>
+      <div class="tags"><span class="tag">MINECRAFT</span><span class="tag">NO MAN'S SKY</span><span class="tag">PROCEDURAL GEN</span></div>
+    </div>
+  </div>
+
+  <!-- 5: PRESENT CONTINUOUS — S1 -->
+  <div class="slide" id="s5">
+    <div class="slide-bg" style="background-image:url('https://cdn.mos.cms.futurecdn.net/rjFMUYJYwqHmgMvWyEpHDN.jpg'); background-position:center top;"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://cdn.mos.cms.futurecdn.net/rjFMUYJYwqHmgMvWyEpHDN.jpg');"></div><div class="thumb-label">THE LAST OF US</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://windowscentral.com/sites/wpcentral.com/files/styles/xlarge/public/field/image/2021/12/halo-infinite-enemy-ai.jpg');"></div><div class="thumb-label">HALO INFINITE</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:38%"></div></div></div>
+      <span class="section-tag">03 — PRESENT CONTINUOUS · Current Developments</span>
+      <div class="slide-title">Machine Learning<br>in Games</div>
+      <span class="speaker">▶ SPEAKER 1</span>
+      <div class="slide-body">
+        Right now, developers <strong>are using</strong> machine learning to create more realistic behaviors. AI is <strong>no longer just following scripts</strong> — it is learning from player actions and improving over time. Companies like <strong>NVIDIA are developing</strong> tools that make game characters more lifelike than ever.
+      </div>
+      <div class="tags"><span class="tag">MACHINE LEARNING</span><span class="tag">NVIDIA DLSS</span></div>
+    </div>
+  </div>
+
+  <!-- 6: PRESENT CONTINUOUS — S2 -->
+  <div class="slide" id="s6">
+    <div class="slide-bg" style="background-image:url('https://windowscentral.com/sites/wpcentral.com/files/styles/xlarge/public/field/image/2021/12/halo-infinite-enemy-ai.jpg');"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://windowscentral.com/sites/wpcentral.com/files/styles/xlarge/public/field/image/2021/12/halo-infinite-enemy-ai.jpg');"></div><div class="thumb-label">HALO INFINITE</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://eipgaming.com/wp-content/uploads/2021/02/cyberpunk-2077-crowds.jpg');"></div><div class="thumb-label">CYBERPUNK 2077</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:46%"></div></div></div>
+      <span class="section-tag">03 — PRESENT CONTINUOUS · Current Developments</span>
+      <div class="slide-title">Generative AI<br>& Dialogue</div>
+      <span class="speaker">▶ SPEAKER 2</span>
+      <div class="slide-body">
+        Studios <strong>are experimenting</strong> with generative AI to create dialogues, textures, and even entire game scenarios. Players <strong>are starting</strong> to see AI-generated NPCs that respond naturally to conversations, making the experience <strong>much more immersive</strong>.
+      </div>
+      <div class="quote">In <strong>Halo Infinite</strong>, enemies coordinate, retreat, and flank — <strong>reacting dynamically</strong> to everything the player does.</div>
+    </div>
+  </div>
+
+  <!-- 7: PAST SIMPLE — S1 -->
+  <div class="slide" id="s7">
+    <div class="slide-bg" style="background-color:#060606; background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Pacman.png/400px-Pacman.png'); background-size:280px; background-repeat:no-repeat; background-position:right 280px center;"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background:#1a0000; background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Pacman.png/400px-Pacman.png'); background-size:60px; background-repeat:no-repeat; background-position:center;"></div><div class="thumb-label">PAC-MAN</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Pong.png/320px-Pong.png'); background-color:#000; background-size:contain; background-repeat:no-repeat; background-position:center;"></div><div class="thumb-label">PONG (1972)</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:54%"></div></div></div>
+      <span class="section-tag">04 — PAST SIMPLE · Before AI</span>
+      <div class="slide-title">Simple Rules,<br>Fixed Patterns</div>
+      <span class="speaker">▶ SPEAKER 1</span>
+      <div class="slide-body">
+        Before advanced AI, game characters <strong>followed</strong> very simple rules. Enemies <strong>moved</strong> in fixed patterns and <strong>repeated</strong> the same actions over and over. In classic games like <strong>Pac-Man</strong>, the ghosts <strong>followed</strong> basic scripts — they <strong>didn't</strong> truly "think."
+      </div>
+      <div class="tags"><span class="tag">PAC-MAN (1980)</span><span class="tag">PONG (1972)</span><span class="tag">FIXED SCRIPTS</span></div>
+    </div>
+  </div>
+
+  <!-- 8: PAST SIMPLE — S2 -->
+  <div class="slide" id="s8">
+    <div class="slide-bg" style="background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Space_Invaders_by_Bally_Midway_Manufacturing_Company.jpg/440px-Space_Invaders_by_Bally_Midway_Manufacturing_Company.jpg'); background-color:#040404; background-size:contain; background-repeat:no-repeat; background-position:right 280px center;"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-color:#040404; background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Space_Invaders_by_Bally_Midway_Manufacturing_Company.jpg/440px-Space_Invaders_by_Bally_Midway_Manufacturing_Company.jpg'); background-size:contain; background-repeat:no-repeat; background-position:center;"></div><div class="thumb-label">SPACE INVADERS</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:61%"></div></div></div>
+      <span class="section-tag">04 — PAST SIMPLE · Before AI</span>
+      <div class="slide-title">No Adaptation,<br>No Personality</div>
+      <span class="speaker">▶ SPEAKER 2</span>
+      <div class="slide-body">
+        Game worlds <strong>were</strong> also much smaller and more limited. Developers <strong>had to</strong> design every single level manually. There <strong>was</strong> no adaptation to the player — if you <strong>were</strong> bad at the game, it <strong>didn't</strong> care. It <strong>was</strong> always the same experience for everyone.
+      </div>
+      <div class="quote">In <strong>Space Invaders</strong>, aliens just <strong>moved left and right</strong> — the same pattern, every single time.</div>
+    </div>
+  </div>
+
+  <!-- 9: COMPARATIVES — S1 -->
+  <div class="slide" id="s9">
+    <div class="slide-bg" style="background-image:url('https://rockstarintel.com/wp-content/uploads/2018/11/rdr2-npc-day-life-11.jpg'); background-position:center top;"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://rockstarintel.com/wp-content/uploads/2018/11/rdr2-npc-day-life-11.jpg');"></div><div class="thumb-label">RDR2</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Pacman.png/400px-Pacman.png'); background-size:contain; background-repeat:no-repeat; background-position:center; background-color:#0a0000;"></div><div class="thumb-label">PAC-MAN</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:69%"></div></div></div>
+      <span class="section-tag">05 — COMPARATIVES · Then vs Now</span>
+      <div class="slide-title">More Intelligent,<br>More Realistic</div>
+      <span class="speaker">▶ SPEAKER 1</span>
+      <div class="slide-body">
+        Modern games are <strong>far more intelligent</strong> than older games. NPCs today are <strong>more realistic</strong>, <strong>more unpredictable</strong>, and <strong>more responsive</strong> than they were twenty years ago. The AI in <strong>Red Dead Redemption 2</strong> is significantly <strong>more complex</strong> than anything in the 90s.
+      </div>
+      <div class="tags"><span class="tag">RED DEAD REDEMPTION 2</span><span class="tag">VS PAC-MAN</span></div>
+    </div>
+  </div>
+
+  <!-- 10: SUPERLATIVES — S2 -->
+  <div class="slide" id="s10">
+    <div class="slide-bg" style="background-image:url('https://cdn.cloudflare.steamstatic.com/steam/apps/1593500/ss_77d975e4a7e3c2c25bca3c72d665e2a1ab36b0b0.jpg');"></div>
+    <div class="overlay"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://cdn.cloudflare.steamstatic.com/steam/apps/1593500/ss_77d975e4a7e3c2c25bca3c72d665e2a1ab36b0b0.jpg');"></div><div class="thumb-label">GOD OF WAR</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://rockstarintel.com/wp-content/uploads/2018/11/rdr2-npc-day-life-11.jpg');"></div><div class="thumb-label">RDR2</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:77%"></div></div></div>
+      <span class="section-tag">05 — SUPERLATIVES · Then vs Now</span>
+      <div class="slide-title">The Most Immersive<br>Games Ever Made</div>
+      <span class="speaker">▶ SPEAKER 2</span>
+      <div class="slide-body">
+        Today's games are <strong>the most immersive they have ever been</strong>. Graphics are better, stories are deeper, and AI makes everything feel <strong>more alive</strong>. However, some players argue that older games were <strong>more challenging</strong> because the difficulty was harder to exploit.
+      </div>
+      <div class="quote">Better AI doesn't always mean <strong>harder</strong> games — sometimes it just means <strong>smarter</strong> ones.</div>
+    </div>
+  </div>
+
+  <!-- 11: CONCLUSION — S1 -->
+  <div class="slide" id="s11">
+    <div class="slide-bg" style="background:radial-gradient(ellipse at 30% 80%, #001a00 0%, #000 70%);"></div>
+    <div class="overlay" style="background:rgba(0,0,0,0.2);"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://eipgaming.com/wp-content/uploads/2021/02/cyberpunk-2077-crowds.jpg');"></div><div class="thumb-label">CYBERPUNK</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://gamerpayblog.b-cdn.net/wp-content/uploads/2023/10/cs2-screenshot-spots.jpg');"></div><div class="thumb-label">CS2</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://i0.wp.com/alanzelauber.com/wp-content/uploads/2022/07/hero.png?ssl=1');"></div><div class="thumb-label">MINECRAFT</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:85%"></div></div></div>
+      <span class="section-tag">06 — CONCLUSION & OPINION</span>
+      <div class="slide-title">The Transformation<br>of Gaming</div>
+      <span class="speaker">▶ SPEAKER 1</span>
+      <div class="slide-body">
+        To conclude, AI has <strong>completely transformed</strong> the video game industry. It makes games <strong>smarter</strong>, more dynamic, and more personalized. We believe this technology will <strong>only continue to improve</strong>, and the line between virtual and real experiences will keep getting thinner.
+      </div>
+    </div>
+  </div>
+
+  <!-- 12: CONCLUSION — S2 + THANK YOU -->
+  <div class="slide" id="s12">
+    <div class="slide-bg" style="background:radial-gradient(ellipse at 70% 20%, #001a00 0%, #000 70%);"></div>
+    <div class="overlay" style="background:rgba(0,0,0,0.2);"></div>
+    <div class="thumb-strip">
+      <div class="thumb-wrap"><div class="thumb highlight" style="background-image:url('https://rockstarintel.com/wp-content/uploads/2018/11/rdr2-npc-day-life-11.jpg');"></div><div class="thumb-label">RDR2</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://windowscentral.com/sites/wpcentral.com/files/styles/xlarge/public/field/image/2021/12/halo-infinite-enemy-ai.jpg');"></div><div class="thumb-label">HALO</div></div>
+      <div class="thumb-wrap"><div class="thumb" style="background-image:url('https://cdn.cloudflare.steamstatic.com/steam/apps/1593500/ss_77d975e4a7e3c2c25bca3c72d665e2a1ab36b0b0.jpg');"></div><div class="thumb-label">GOD OF WAR</div></div>
+    </div>
+    <div class="slide-content">
+      <div class="hud"><span class="hud-label">PROGRESS</span><div class="hud-track"><div class="hud-fill" style="width:100%"></div></div></div>
+      <span class="section-tag">06 — CONCLUSION & OPINION</span>
+      <div class="slide-title">A Testing Ground<br>for the Future</div>
+      <span class="speaker">▶ SPEAKER 2</span>
+      <div class="slide-body">
+        In our opinion, AI in video games is <strong>not just entertainment</strong> — it is also a <strong>testing ground for real-world AI development</strong>. What developers learn in games today could influence the technology of tomorrow.
+      </div>
+      <div style="margin-top:44px; text-align:center;">
+        <div style="font-family:'Press Start 2P',monospace; font-size:22px; color:#00FF41; letter-spacing:6px;">THANK YOU</div>
+        <div style="font-family:'Press Start 2P',monospace; font-size:10px; color:#2a2a2a; margin-top:14px; letter-spacing:3px;">FOR LISTENING</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<div class="nav">
+  <button class="nav-btn" id="btn-prev" onclick="go(cur-1)" disabled>◀ PREV</button>
+  <div class="nav-dots" id="dots"></div>
+  <span class="slide-counter" id="counter">0 / 12</span>
+  <button class="nav-btn" id="btn-next" onclick="go(cur+1)">NEXT ▶</button>
+</div>
+
+<div class="fs-hint" onclick="toggleFS()" title="F = fullscreen">[ F ]</div>
+
+<script>
+  const TOTAL = 13;
+  let cur = 0;
+
+  const dotsEl = document.getElementById('dots');
+  for (let i = 0; i < TOTAL; i++) {
+    const d = document.createElement('button');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.setAttribute('aria-label', 'Slide ' + (i + 1));
+    d.onclick = () => go(i);
+    dotsEl.appendChild(d);
+  }
+
+  function go(n) {
+    if (n < 0 || n >= TOTAL) return;
+    document.getElementById('s' + cur).classList.remove('active');
+    dotsEl.children[cur].classList.remove('active');
+    cur = n;
+    document.getElementById('s' + cur).classList.add('active');
+    dotsEl.children[cur].classList.add('active');
+    document.getElementById('btn-prev').disabled = cur === 0;
+    document.getElementById('btn-next').disabled = cur === TOTAL - 1;
+    document.getElementById('counter').textContent = cur + ' / ' + (TOTAL - 1);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(cur + 1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); go(cur - 1); }
+    if (e.key === 'f' || e.key === 'F') toggleFS();
+  });
+
+  function toggleFS() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  }
+</script>
+</body>
+</html>
